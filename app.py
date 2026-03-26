@@ -34,6 +34,7 @@ def load_data():
         spreadsheet="https://docs.google.com/spreadsheets/d/1C3-W6MIZMptgND9e8Zms2orhEYfFPCls3vC3FuxfC30/edit#gid=0",
         worksheet="room_users",
         ttl="0s"
+    )
 def update_gsheet(df):
     conn.update(worksheet="room_users", data=df)
     st.cache_data.clear()
