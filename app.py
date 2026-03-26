@@ -36,7 +36,11 @@ def load_data():
         ttl="0s"
     )
 def update_gsheet(df):
-    conn.update(worksheet="room_users", data=df)
+    conn.update(
+        spreadsheet="https://docs.google.com/spreadsheets/d/1C3-W6MIZMptgND9e8Zms2orhEYfFPCls3vC3FuxfC30/edit#gid=0",
+        worksheet="room_users",
+        data=df
+    )
     st.cache_data.clear()
 
 # 3. 데이터 로드
