@@ -1,0 +1,8 @@
+Plaintext
+
+streamlit
+pandas
+Pillow
+streamlit-option-menu
+streamlit-image-coordinates
+openpyxl
