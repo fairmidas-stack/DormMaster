@@ -67,13 +67,13 @@ if "room" not in st.session_state:
 
 # 4. 사이드바 구성
 with st.sidebar:
-    st.title("🏢 숙소동 관리 (영구저장)")
+    st.title("🏢 숙소동 관리")
     selected = option_menu(None, ["실시간 도면", "전체 명단", "퇴실 히스토리"], 
                           icons=["map", "list-task", "archive"], default_index=0)
     search_q = st.text_input("🔍 통합 검색", placeholder="이름/방/번호")
     st.divider()
     password = st.text_input("관리자 비밀번호", type="password")
-    is_admin = (password == "1234")
+    is_admin = (password == "0416")
 
 if search_q:
     df_active = df_active[df_active["name"].astype(str).str.contains(search_q, na=False) | 
