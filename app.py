@@ -41,7 +41,6 @@ def update_gsheet(df):
         doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
         worksheet = doc.worksheet("room_users")
         worksheet.clear()
-        # 데이터프레임을 리스트로 변환하여 업로드
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
         st.cache_data.clear()
         return True
@@ -65,7 +64,7 @@ with st.sidebar:
     search_q = st.text_input("🔍 통합 검색", placeholder="이름/방/번호")
     st.divider()
     password = st.text_input("관리자 비밀번호", type="password")
-    is_admin = (password == "0416") # 형님의 비밀번호
+    is_admin = (password == "0416")
 
 if search_q:
     df_active = df_active[df_active["name"].astype(str).str.contains(search_q, na=False) | 
@@ -89,7 +88,7 @@ if selected == "실시간 도면":
     with left:
         if os.path.exists("dorm_map.png"):
             img = Image.open("dorm_map.png")
-            target_width = 800  # 도면 크기 최적화
+            target_width = 800  
             ratio = target_width / 800     
             img = img.resize((target_width, int(img.size[1]*target_width/img.size[0])))
             draw = ImageDraw.Draw(img)
@@ -105,18 +104,24 @@ if selected == "실시간 도면":
                 
                 r_size = 13 * ratio
                 draw.ellipse((x-r_size, y-r_size, x+r_size, y+r_size), fill=color, outline="white", width=2)
-                
-                room_int = int(room) if str(room).isdigit() else 0
                 draw.text((x - (10 * ratio), y - (28 * ratio)), str(room), fill="#333333", font=font) 
 
+            # 좌표 판정 핵심 로직 (정밀도 개선 버전)
             coords = streamlit_image_coordinates(img, key="dorm_map_final")
             if coords:
+                min_dist = 999999
                 new_room = None
                 for r, (ox, oy) in ROOM_COORDS.items():
-                    if abs(coords["x"]-(ox*ratio)) < (20*ratio) and abs(coords["y"]-(oy*ratio)) < (20*ratio):
-                        new_room = r; break
-                if new_room and new_room != st.session_state["room"]:
-                    st.session_state["room"] = new_room; st.rerun()
+                    # 피타고라스 정리로 클릭 지점과 방 중앙 사이의 실제 거리 계산
+                    dist = ((coords["x"] - (ox * ratio))**2 + (coords["y"] - (oy * ratio))**2)**0.5
+                    # 반경 25px 이내에 있으면서 가장 가까운 방을 선택
+                    if dist < (25 * ratio) and dist < min_dist:
+                        min_dist = dist
+                        new_room = r
+
+                if new_room and new_room != st.session_state.get("room"):
+                    st.session_state["room"] = new_room
+                    st.rerun()
 
     with right:
         sel_room = st.session_state.get("room")
@@ -137,7 +142,6 @@ if selected == "실시간 도면":
                 """, unsafe_allow_html=True)
                 
                 if is_admin:
-                    col1, col2 = st.columns(2)
                     # 1. 퇴실 처리
                     with st.expander(f"🚪 퇴실 처리"):
                         out_date = st.date_input("퇴실일 선택", value=date.today(), key=f"dout_{u['user_id']}")
