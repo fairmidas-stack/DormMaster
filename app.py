@@ -70,6 +70,11 @@ except:
 df_all['is_active'] = pd.to_numeric(df_all['is_active'], errors='coerce').fillna(1)
 df_active = df_all[df_all["is_active"] == 1]
 
+# --- 👇 새로 추가할 2줄 👇 ---
+if "room" not in st.session_state:
+    st.session_state["room"] = None
+# -----------------------------
+
 # 4. 사이드바 구성
 with st.sidebar:
     st.title("🏢 숙소동 관리 (영구저장)")
