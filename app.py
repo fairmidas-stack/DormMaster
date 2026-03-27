@@ -27,30 +27,29 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 구글 시트 연결 설정
+# 2. 구글 시트 연결 설정 (Secrets의 인증 정보를 자동으로 사용함)
 conn = st.connection("gsheets", type=GSheetsConnection)
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1C3-W6MIZMptgND9e8Zms2orhEYfFPCls3vC3FuxfC30/edit#gid=0"
 
 def load_data():
-    # 주소를 직접 찔러서 최신 데이터를 가져옵니다.
+    # 중요: spreadsheet 인자를 제거하여 Secrets의 인증 세트를 강제 사용하게 합니다.
     return conn.read(
-        spreadsheet=SHEET_URL,
         worksheet="room_users",
         ttl="0s"
     )
 
 def update_gsheet(df):
     try:
+        # 중요: 업데이트 시에도 주소 없이 '탭 이름'만 지정하여 인증 오류를 방지합니다.
         conn.update(
-            spreadsheet=SHEET_URL,
             worksheet="room_users",
             data=df
         )
         st.cache_data.clear()
         return True
     except Exception as e:
+        # 에러 발생 시 상세 원인을 화면에 표시합니다.
         st.error(f"⚠️ 구글 시트 저장 실패: {e}")
-        st.info("시트 공유 설정이 '편집자'로 되어있는지 확인해주세요.")
+        st.info("시트의 'room_users' 탭 이름과 서비스 계정 공유 설정을 확인해주세요.")
         return False
 
 # 3. 데이터 로드 및 전처리
