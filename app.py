@@ -27,13 +27,28 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 구글 시트 연결 설정
-# 아무 매개변수도 넣지 않고 이름만 지정합니다. 
-# 이렇게 하면 스트림릿이 알아서 Secrets의 [connections.gsheets]를 찾아갑니다.
-conn = st.connection("gsheets", type=GSheetsConnection)
+# 2. 구글 시트 연결 설정 (Secrets 정보를 직접 추출하여 강제 연결)
+# 스트림릿이 자동으로 찾지 못할 때를 대비해, 인증 정보를 직접 주입합니다.
+creds_dict = {
+    "type": st.secrets["connections"]["gsheets"]["type"],
+    "project_id": st.secrets["connections"]["gsheets"]["project_id"],
+    "private_key_id": st.secrets["connections"]["gsheets"]["private_key_id"],
+    "private_key": st.secrets["connections"]["gsheets"]["private_key"],
+    "client_email": st.secrets["connections"]["gsheets"]["client_email"],
+    "client_id": st.secrets["connections"]["gsheets"]["client_id"],
+    "auth_uri": st.secrets["connections"]["gsheets"]["auth_uri"],
+    "token_uri": st.secrets["connections"]["gsheets"]["token_uri"],
+    "auth_provider_x509_cert_url": st.secrets["connections"]["gsheets"]["auth_provider_x509_cert_url"],
+    "client_x509_cert_url": st.secrets["connections"]["gsheets"]["client_x509_cert_url"],
+}
+
+# 연결 생성 시 spreadsheet ID와 인증 딕셔너리를 함께 전달합니다.
+conn = st.connection("gsheets", 
+                     type=GSheetsConnection, 
+                     spreadsheet=st.secrets["connections"]["gsheets"]["spreadsheet"],
+                     **creds_dict)
 
 def load_data():
-    # 데이터 읽기: 오직 worksheet 이름만 지정합니다.
     return conn.read(
         worksheet="room_users",
         ttl="0s"
@@ -41,7 +56,6 @@ def load_data():
 
 def update_gsheet(df):
     try:
-        # 데이터 쓰기: 오직 worksheet 이름과 데이터만 지정합니다.
         conn.update(
             worksheet="room_users",
             data=df
@@ -49,6 +63,7 @@ def update_gsheet(df):
         st.cache_data.clear()
         return True
     except Exception as e:
+        # 에러 발생 시 더 자세한 정보를 찍어줍니다.
         st.error(f"⚠️ 저장 실패 원인: {e}")
         return False
         
