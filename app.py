@@ -27,13 +27,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 구글 시트 연결 설정 (Secrets 정보를 명시적으로 전달)
-# 이렇게 하면 앱이 무조건 Secrets의 인증 정보를 사용하게 됩니다.
-conn = st.connection("gsheets", 
-                     type=GSheetsConnection, 
-                     spreadsheet=st.secrets["connections"]["gsheets"]["spreadsheet"])
+# 2. 구글 시트 연결 설정
+# 아무 매개변수도 넣지 않고 이름만 지정합니다. 
+# 이렇게 하면 스트림릿이 알아서 Secrets의 [connections.gsheets]를 찾아갑니다.
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
+    # 데이터 읽기: 오직 worksheet 이름만 지정합니다.
     return conn.read(
         worksheet="room_users",
         ttl="0s"
@@ -41,6 +41,7 @@ def load_data():
 
 def update_gsheet(df):
     try:
+        # 데이터 쓰기: 오직 worksheet 이름과 데이터만 지정합니다.
         conn.update(
             worksheet="room_users",
             data=df
@@ -48,7 +49,6 @@ def update_gsheet(df):
         st.cache_data.clear()
         return True
     except Exception as e:
-        # 에러가 나면 더 구체적인 이유를 보여줍니다.
         st.error(f"⚠️ 저장 실패 원인: {e}")
         return False
         
