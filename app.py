@@ -6,51 +6,55 @@ from PIL import Image, ImageDraw, ImageFont
 from streamlit_image_coordinates import streamlit_image_coordinates
 from streamlit_option_menu import option_menu
 from streamlit_gsheets import GSheetsConnection
-import os
-import json
+import streamlit as st
+import pandas as pd
+import gspread # 새로 고용한 구글 공식 심부름꾼
 
-# 1. 디자인 및 세션 설정
-st.set_page_config(layout="wide", page_title="인력개발원 숙소동 v2.0 (GS)")
+# -----------------------------------------------------
+# 1. VIP 전용 구글 시트 직접 연결 함수
+# -----------------------------------------------------
+def get_gspread_client():
+    # Secrets 보관함에 있는 모든 열쇠 정보를 통째로 꺼내서 딕셔너리로 만듭니다.
+    creds_dict = dict(st.secrets["connections"]["gsheets"])
+    
+    # 구글 공식 라이브러리에게 이 열쇠를 주고 "로그인해!" 라고 명령합니다.
+    gc = gspread.service_account_from_dict(creds_dict)
+    return gc
 
-if "room" not in st.session_state:
-    st.session_state["room"] = None
-
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #eee; }
-    .user-card { 
-        background-color: white; padding: 20px; border-radius: 12px; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.07); margin-bottom: 15px;
-        border-left: 6px solid #228be6;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 2. 구글 시트 연결 설정 (가장 표준적인 연결 방식)
-# 매개변수를 복잡하게 넣지 않고 이름만 지정합니다.
-# 이렇게 하면 스트림릿이 Secrets의 [connections.gsheets]를 자동으로 매핑합니다.
-conn = st.connection("gsheets", type=GSheetsConnection)
-
+# -----------------------------------------------------
+# 2. 데이터 불러오기
+# -----------------------------------------------------
 def load_data():
-    # 데이터 읽기: Secrets의 spreadsheet ID를 자동으로 사용합니다.
-    return conn.read(
-        worksheet="room_users",
-        ttl="0s"
-    )
+    gc = get_gspread_client() # 로그인된 상태 가져오기
+    
+    # Secrets에 있는 시트 ID로 문서 열기
+    doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
+    worksheet = doc.worksheet("room_users") # 탭 이름
+    
+    # 데이터를 싹 다 긁어와서 표(DataFrame)로 변환
+    data = worksheet.get_all_records()
+    return pd.DataFrame(data)
 
+# -----------------------------------------------------
+# 3. 데이터 저장하기 (CRUD 중 쓰기 권한)
+# -----------------------------------------------------
 def update_gsheet(df):
     try:
-        # 데이터 쓰기: Secrets의 정보를 바탕으로 인증하여 저장합니다.
-        conn.update(
-            worksheet="room_users",
-            data=df
-        )
-        st.cache_data.clear()
+        gc = get_gspread_client() # 로그인된 상태 가져오기
+        doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
+        worksheet = doc.worksheet("room_users")
+        
+        # 기존 시트의 내용을 깨끗하게 지웁니다.
+        worksheet.clear()
+        
+        # 새로운 표(df)의 제목줄과 데이터를 구글 시트에 한 번에 덮어씁니다.
+        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        
+        st.cache_data.clear() # 스트림릿 캐시 새로고침
         return True
     except Exception as e:
-        # 에러 발생 시 상세 원인을 출력합니다.
-        st.error(f"⚠️ 저장 실패 원인: {e}")
+        # 만약 여기서도 에러가 나면, 진짜 구체적인 이유를 화면에 띄워줍니다.
+        st.error(f"⚠️ 저장 실패 상세 원인: {e}")
         return False
         
 # 3. 데이터 로드 및 전처리
