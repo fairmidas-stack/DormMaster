@@ -10,6 +10,12 @@ from PIL import Image, ImageDraw, ImageFont
 from streamlit_image_coordinates import streamlit_image_coordinates
 from streamlit_option_menu import option_menu
 
+# --- 👇 바로 이 위치입니다! (모든 import가 끝난 직후) 👇 ---
+st.set_page_config(
+    page_title="숙소동 관리 시스템",
+    layout="wide",  # 화면을 넓게 쓰게 해줍니다.
+    initial_sidebar_state="expanded"
+)
 # -----------------------------------------------------
 # 1. VIP 전용 구글 시트 직접 연결 함수
 # -----------------------------------------------------
@@ -107,7 +113,7 @@ if selected == "실시간 도면":
     with left:
         if os.path.exists("dorm_map.png"):
             img = Image.open("dorm_map.png")
-            target_width = 1200  
+            target_width = 800  
             ratio = target_width / 800     
             img = img.resize((target_width, int(img.size[1]*target_width/img.size[0])))
             draw = ImageDraw.Draw(img)
