@@ -105,24 +105,19 @@ if selected == "실시간 도면":
                 r_size = 13 * ratio
                 draw.ellipse((x-r_size, y-r_size, x+r_size, y+r_size), fill=color, outline="white", width=2)
                 
-                # --- [방 번호 텍스트 위치 가독성 최적화] ---
                 room_str = str(room)
                 room_int = int(room_str) if room_str.isdigit() else 0
                 last_two = room_int % 100 
 
-                # 1. 오른쪽 대각선 구역 (x01~x09호) : 원의 왼쪽으로 글자 배치
                 if 1 <= last_two <= 9:
                     text_x, text_y = x - (35 * ratio), y - (8 * ratio)
-                # 2. 501~504호 구역 : 위쪽 여백 더 확보
                 elif 501 <= room_int <= 504:
                     text_x, text_y = x - (10 * ratio), y - (32 * ratio)
-                # 3. 기타 구역 : 기본 위쪽 배치
                 else:
                     text_x, text_y = x - (10 * ratio), y - (28 * ratio)
 
                 draw.text((text_x, text_y), room_str, fill="#333333", font=font) 
 
-            # 좌표 판정 핵심 로직
             coords = streamlit_image_coordinates(img, key="dorm_map_final")
             if coords:
                 min_dist = 999999
@@ -147,10 +142,20 @@ if selected == "실시간 도면":
                 st.write("현재 빈 방입니다.")
             
             for u in users:
+                # [수정] 우측 상세 정보창 전화번호 마스킹 적용
+                phone_raw = str(u['phone'])
+                if is_admin:
+                    phone_display = phone_raw
+                else:
+                    if len(phone_raw) >= 10:
+                        phone_display = f"{phone_raw[:3]}-****-{phone_raw[-4:]}"
+                    else:
+                        phone_display = "****"
+                
                 st.markdown(f"""
                 <div style="border:1px solid #ddd; padding:10px; border-radius:10px; margin-bottom:10px; background-color:#f9f9f9;">
                     <h4 style="margin: 0;">{u['name']} ({u['gender']})</h4>
-                    <p style="margin:5px 0;">📞 {u['phone']} | 🚗 {u['car_number']}</p>
+                    <p style="margin:5px 0;">📞 {phone_display} | 🚗 {u['car_number']}</p>
                     <p style="margin:0; font-size:0.85em; color:gray;">📅 입실: {u['check_in']}</p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -167,7 +172,7 @@ if selected == "실시간 도면":
                             en = st.text_input("이름", value=u['name'])
                             ep = st.text_input("연락처", value=u['phone'])
                             ec = st.text_input("차량번호", value=u['car_number'])
-                            er = st.text_input("방 번호 (변경 시 자동이동)", value=u['room_number'])
+                            er = st.text_input("방 번호", value=u['room_number'])
                             if st.form_submit_button("수정 저장"):
                                 idx = df_all[df_all['user_id'] == u['user_id']].index
                                 df_all.loc[idx, ['name', 'phone', 'car_number', 'room_number']] = [en, ep, ec, er]
@@ -198,10 +203,19 @@ if selected == "실시간 도면":
         else:
             st.info("👈 왼쪽 도면에서 방 번호를 클릭하세요.")
 
+# --- [메뉴 2 & 3: 명단 조회 보안 적용] ---
 elif selected == "전체 명단":
     st.subheader("📋 현재 거주자 명단")
-    st.dataframe(df_active, use_container_width=True)
+    display_df = df_active.copy()
+    if not is_admin:
+        display_df['phone'] = display_df['phone'].apply(lambda x: str(x)[:3] + "-****-" + str(x)[-4:] if len(str(x)) >= 10 else "****")
+        st.info("🔒 상세 연락처는 관리자 로그인 후 확인 가능합니다.")
+    st.dataframe(display_df, use_container_width=True)
 
 elif selected == "퇴실 히스토리":
     st.subheader("📚 과거 퇴실자 기록")
-    st.dataframe(df_all[df_all["is_active"] == 0], use_container_width=True)
+    display_df = df_all[df_all["is_active"] == 0].copy()
+    if not is_admin:
+        display_df['phone'] = display_df['phone'].apply(lambda x: str(x)[:3] + "-****-" + str(x)[-4:] if len(str(x)) >= 10 else "****")
+        st.info("🔒 상세 연락처는 관리자 로그인 후 확인 가능합니다.")
+    st.dataframe(display_df, use_container_width=True)
