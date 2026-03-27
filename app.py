@@ -1,14 +1,14 @@
-import streamlit as st
-import pandas as pd
-from datetime import date
+import os
+import json
 import uuid
-from PIL import Image, ImageDraw, ImageFont
-from streamlit_image_coordinates import streamlit_image_coordinates
-from streamlit_option_menu import option_menu
-from streamlit_gsheets import GSheetsConnection
+from datetime import date
+
 import streamlit as st
 import pandas as pd
 import gspread # 새로 고용한 구글 공식 심부름꾼
+from PIL import Image, ImageDraw, ImageFont
+from streamlit_image_coordinates import streamlit_image_coordinates
+from streamlit_option_menu import option_menu
 
 # -----------------------------------------------------
 # 1. VIP 전용 구글 시트 직접 연결 함수
