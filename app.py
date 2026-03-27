@@ -34,23 +34,40 @@ def load_data():
     except:
         return pd.DataFrame(columns=["user_id", "room_number", "name", "gender", "phone", "car_number", "check_in", "check_out", "status", "is_active"])
 
-# 3. 데이터 저장하기 (GPT 조언 반영: clear() 제거 및 안전 덮어쓰기)
+# [추가] 2-1. 자동 백업 로직 (GPT 추천 기능)
+def auto_backup(df):
+    try:
+        gc = get_gspread_client()
+        doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
+        # 'backup_log' 시트가 없으면 생성, 있으면 가져옴
+        try:
+            backup_ws = doc.worksheet("backup_log")
+        except gspread.exceptions.WorksheetNotFound:
+            backup_ws = doc.add_worksheet(title="backup_log", rows="1000", cols="20")
+        
+        backup_data = [df.columns.values.tolist()] + df.values.tolist()
+        backup_ws.update(values=backup_data, range_name='A1')
+        return True
+    except:
+        return False
+
+# 3. 데이터 저장하기 (안전 덮어쓰기 + 자동 백업 통합)
 def update_gsheet(df):
     try:
         gc = get_gspread_client()
         doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
         worksheet = doc.worksheet("room_users")
         
-        # [변경점] 전체 삭제(clear) 대신 데이터가 있는 만큼만 정확히 덮어씁니다.
-        # 데이터프레임을 리스트 형식으로 변환 (헤더 포함)
-        data_to_write = [df.columns.values.tolist()] + df.values.tolist()
+        # [단계 1] 저장 직전 데이터 백업 실행
+        auto_backup(df)
         
-        # 1. 일단 첫 번째 셀(A1)부터 데이터를 덮어씁니다.
+        # [단계 2] 덮어쓰기 방식으로 저장 (clear() 제거)
+        data_to_write = [df.columns.values.tolist()] + df.values.tolist()
         worksheet.update(values=data_to_write, range_name='A1')
         
-        # 2. 만약 기존보다 데이터가 줄어들었을 경우, 남은 찌꺼기 행들을 지워줍니다.
-        # (이 방식이 clear 후 쓰는 것보다 네트워크 오류 시 훨씬 안전합니다)
-        current_rows = len(worksheet.get_all_values())
+        # [단계 3] 데이터가 줄어든 경우 하단 잔여 행 삭제
+        current_all_values = worksheet.get_all_values()
+        current_rows = len(current_all_values)
         new_rows = len(data_to_write)
         if current_rows > new_rows:
             worksheet.delete_rows(new_rows + 1, current_rows)
@@ -58,7 +75,7 @@ def update_gsheet(df):
         st.cache_data.clear()
         return True
     except Exception as e:
-        st.error(f"⚠️ 저장 중 오류 발생: {e}. 데이터 확인이 필요합니다.")
+        st.error(f"⚠️ 저장 오류: {e}. 백업 시트를 확인해 보세요.")
         return False
 
 # 데이터 로드 및 전처리
@@ -195,13 +212,8 @@ if selected == "실시간 도면":
                         ni = st.date_input("입실일", value=date.today())
                         if st.form_submit_button("입실 저장"):
                             if nn and np:
-                                # ID 생성 안전 로직: 현재 있는 모든 ID 중 최대값을 정확히 찾음
-                                try:
-                                    last_id = pd.to_numeric(df_all["user_id"], errors='coerce').max()
-                                    new_id = int(last_id + 1) if not pd.isna(last_id) else 1
-                                except:
-                                    new_id = 1000 # 오류 시 안전값
-
+                                last_id = pd.to_numeric(df_all["user_id"], errors='coerce').max()
+                                new_id = int(last_id + 1) if not pd.isna(last_id) else 1
                                 new_row = {
                                     "user_id": new_id, "room_number": str(sel_room), "name": nn,
                                     "gender": ng, "phone": np, "car_number": nc, "check_in": ni.strftime('%Y-%m-%d'),
