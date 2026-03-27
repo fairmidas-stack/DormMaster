@@ -104,17 +104,31 @@ if selected == "실시간 도면":
                 
                 r_size = 13 * ratio
                 draw.ellipse((x-r_size, y-r_size, x+r_size, y+r_size), fill=color, outline="white", width=2)
-                draw.text((x - (10 * ratio), y - (28 * ratio)), str(room), fill="#333333", font=font) 
+                
+                # --- [방 번호 텍스트 위치 가독성 최적화] ---
+                room_str = str(room)
+                room_int = int(room_str) if room_str.isdigit() else 0
+                last_two = room_int % 100 
 
-            # 좌표 판정 핵심 로직 (정밀도 개선 버전)
+                # 1. 오른쪽 대각선 구역 (x01~x09호) : 원의 왼쪽으로 글자 배치
+                if 1 <= last_two <= 9:
+                    text_x, text_y = x - (35 * ratio), y - (8 * ratio)
+                # 2. 501~504호 구역 : 위쪽 여백 더 확보
+                elif 501 <= room_int <= 504:
+                    text_x, text_y = x - (10 * ratio), y - (32 * ratio)
+                # 3. 기타 구역 : 기본 위쪽 배치
+                else:
+                    text_x, text_y = x - (10 * ratio), y - (28 * ratio)
+
+                draw.text((text_x, text_y), room_str, fill="#333333", font=font) 
+
+            # 좌표 판정 핵심 로직
             coords = streamlit_image_coordinates(img, key="dorm_map_final")
             if coords:
                 min_dist = 999999
                 new_room = None
                 for r, (ox, oy) in ROOM_COORDS.items():
-                    # 피타고라스 정리로 클릭 지점과 방 중앙 사이의 실제 거리 계산
                     dist = ((coords["x"] - (ox * ratio))**2 + (coords["y"] - (oy * ratio))**2)**0.5
-                    # 반경 25px 이내에 있으면서 가장 가까운 방을 선택
                     if dist < (25 * ratio) and dist < min_dist:
                         min_dist = dist
                         new_room = r
@@ -142,14 +156,12 @@ if selected == "실시간 도면":
                 """, unsafe_allow_html=True)
                 
                 if is_admin:
-                    # 1. 퇴실 처리
                     with st.expander(f"🚪 퇴실 처리"):
                         out_date = st.date_input("퇴실일 선택", value=date.today(), key=f"dout_{u['user_id']}")
                         if st.button("퇴실 확정", key=f"bout_{u['user_id']}", type="primary"):
                             df_all.loc[df_all['user_id'] == u['user_id'], ['is_active', 'check_out']] = [0, out_date.strftime('%Y-%m-%d')]
                             if update_gsheet(df_all): st.rerun()
 
-                    # 2. 정보 수정 및 방 이동
                     with st.expander(f"📝 정보 수정 / 방 이동"):
                         with st.form(key=f"edit_{u['user_id']}"):
                             en = st.text_input("이름", value=u['name'])
@@ -159,9 +171,7 @@ if selected == "실시간 도면":
                             if st.form_submit_button("수정 저장"):
                                 idx = df_all[df_all['user_id'] == u['user_id']].index
                                 df_all.loc[idx, ['name', 'phone', 'car_number', 'room_number']] = [en, ep, ec, er]
-                                if update_gsheet(df_all): 
-                                    st.success("수정 완료!")
-                                    st.rerun()
+                                if update_gsheet(df_all): st.rerun()
             
             if is_admin and len(users) < 4:
                 st.divider()
