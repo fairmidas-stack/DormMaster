@@ -10,20 +10,18 @@ from PIL import Image, ImageDraw, ImageFont
 from streamlit_image_coordinates import streamlit_image_coordinates
 from streamlit_option_menu import option_menu
 
-# --- 👇 바로 이 위치입니다! (모든 import가 끝난 직후) 👇 ---
+# --- 설정: 화면을 넓게 쓰고 제목 설정 ---
 st.set_page_config(
     page_title="숙소동 관리 시스템",
-    layout="wide",  # 화면을 넓게 쓰게 해줍니다.
+    layout="wide",  
     initial_sidebar_state="expanded"
 )
+
 # -----------------------------------------------------
 # 1. VIP 전용 구글 시트 직접 연결 함수
 # -----------------------------------------------------
 def get_gspread_client():
-    # Secrets 보관함에 있는 모든 열쇠 정보를 통째로 꺼내서 딕셔너리로 만듭니다.
     creds_dict = dict(st.secrets["connections"]["gsheets"])
-    
-    # 구글 공식 라이브러리에게 이 열쇠를 주고 "로그인해!" 라고 명령합니다.
     gc = gspread.service_account_from_dict(creds_dict)
     return gc
 
@@ -31,55 +29,41 @@ def get_gspread_client():
 # 2. 데이터 불러오기
 # -----------------------------------------------------
 def load_data():
-    gc = get_gspread_client() # 로그인된 상태 가져오기
-    
-    # Secrets에 있는 시트 ID로 문서 열기
+    gc = get_gspread_client()
     doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
-    worksheet = doc.worksheet("room_users") # 탭 이름
-    
-    # 데이터를 싹 다 긁어와서 표(DataFrame)로 변환
+    worksheet = doc.worksheet("room_users")
     data = worksheet.get_all_records()
     return pd.DataFrame(data)
 
 # -----------------------------------------------------
-# 3. 데이터 저장하기 (CRUD 중 쓰기 권한)
+# 3. 데이터 저장하기
 # -----------------------------------------------------
 def update_gsheet(df):
     try:
-        gc = get_gspread_client() # 로그인된 상태 가져오기
+        gc = get_gspread_client()
         doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
         worksheet = doc.worksheet("room_users")
-        
-        # 기존 시트의 내용을 깨끗하게 지웁니다.
         worksheet.clear()
-        
-        # 새로운 표(df)의 제목줄과 데이터를 구글 시트에 한 번에 덮어씁니다.
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
-        
-        st.cache_data.clear() # 스트림릿 캐시 새로고침
+        st.cache_data.clear()
         return True
     except Exception as e:
-        # 만약 여기서도 에러가 나면, 진짜 구체적인 이유를 화면에 띄워줍니다.
         st.error(f"⚠️ 저장 실패 상세 원인: {e}")
         return False
         
-# 3. 데이터 로드 및 전처리
+# 데이터 로드 및 전처리
 try:
     df_all = load_data()
-    # 데이터가 아예 없을 경우 대비
     if df_all is None or df_all.empty:
         df_all = pd.DataFrame(columns=["user_id", "room_number", "name", "gender", "phone", "car_number", "check_in", "check_out", "status", "is_active"])
 except:
     df_all = pd.DataFrame(columns=["user_id", "room_number", "name", "gender", "phone", "car_number", "check_in", "check_out", "status", "is_active"])
 
-# 데이터 타입 보정 (문자열로 들어온 숫자를 처리)
 df_all['is_active'] = pd.to_numeric(df_all['is_active'], errors='coerce').fillna(1)
 df_active = df_all[df_all["is_active"] == 1]
 
-# --- 👇 새로 추가할 2줄 👇 ---
 if "room" not in st.session_state:
     st.session_state["room"] = None
-# -----------------------------
 
 # 4. 사이드바 구성
 with st.sidebar:
@@ -125,12 +109,11 @@ if selected == "실시간 도면":
             for room, (orig_x, orig_y) in ROOM_COORDS.items():
                 x, y = orig_x * ratio, orig_y * ratio
                 users = room_map.get(str(room), [])
-                color = "#fa5252" if users else "#40c057" # 사람이 있으면 빨간색, 없으면 초록색
+                color = "#fa5252" if users else "#40c057"
                 
                 r_size = 13 * ratio
                 draw.ellipse((x-r_size, y-r_size, x+r_size, y+r_size), fill=color, outline="white", width=2)
                 
-                # 방 번호 텍스트 배치
                 room_int = int(room) if str(room).isdigit() else 0
                 if 511 <= room_int <= 520:
                     draw.text((x - (15 * ratio), y - (32 * ratio)), str(room), fill="#333333", font=font)
@@ -159,7 +142,7 @@ if selected == "실시간 도면":
             
             for u in users:
                 st.markdown(f"""
-                <div class="user-card">
+                <div class="user-card" style="border:1px solid #ddd; padding:10px; border-radius:10px; margin-bottom:10px;">
                     <h4 style="margin: 0;">{u['name']} ({u['gender']})</h4>
                     <p style="margin:5px 0;">📞 {u['phone']} | 🚗 {u['car_number']}</p>
                     <p style="margin:0; font-size:0.85em; color:gray;">📅 입실: {u['check_in']}</p>
@@ -167,11 +150,18 @@ if selected == "실시간 도면":
                 """, unsafe_allow_html=True)
                 
                 if is_admin:
+                    # --- 👇 이 부분이 수정되었습니다: 퇴실 날짜 선택 기능 추가 👇 ---
                     with st.expander(f"🚪 {u['name']}님 퇴실 처리"):
+                        # 날짜 선택 위젯 추가
+                        out_date = st.date_input("퇴실 날짜 선택", value=date.today(), key=f"date_out_{u['user_id']}")
+                        
                         if st.button("퇴실 확정", key=f"btn_out_{u['user_id']}", type="primary"):
-                            df_all.loc[df_all['user_id'] == u['user_id'], ['is_active', 'check_out']] = [0, date.today().strftime('%Y-%m-%d')]
+                            # 선택한 날짜로 check_out 저장
+                            df_all.loc[df_all['user_id'] == u['user_id'], ['is_active', 'check_out']] = [0, out_date.strftime('%Y-%m-%d')]
                             if update_gsheet(df_all):
+                                st.success(f"{u['name']}님 퇴실 처리 완료!")
                                 st.rerun()
+                    # ---------------------------------------------------------
             
             if is_admin and len(users) < 4:
                 st.divider()
@@ -185,12 +175,15 @@ if selected == "실시간 도면":
                         
                         if st.form_submit_button("입실 저장"):
                             if nn and np:
+                                # 마지막 숫자 ID 찾기 (숫자 관리용)
+                                last_id = pd.to_numeric(df_all["user_id"], errors='coerce').max()
+                                new_id = int(last_id + 1) if not pd.isna(last_id) else 1
+                                
                                 new_row = {
-                                    "user_id": str(uuid.uuid4()), "room_number": str(sel_room), "name": nn,
+                                    "user_id": new_id, "room_number": str(sel_room), "name": nn,
                                     "gender": ng, "phone": np, "car_number": nc, "check_in": ni.strftime('%Y-%m-%d'),
                                     "check_out": "", "status": "occupied", "is_active": 1
                                 }
-                                # 기존 데이터와 합쳐서 시트에 업데이트
                                 df_new = pd.concat([df_all, pd.DataFrame([new_row])], ignore_index=True)
                                 if update_gsheet(df_new):
                                     st.success("데이터가 안전하게 저장되었습니다.")
