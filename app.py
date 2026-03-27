@@ -34,18 +34,31 @@ def load_data():
     except:
         return pd.DataFrame(columns=["user_id", "room_number", "name", "gender", "phone", "car_number", "check_in", "check_out", "status", "is_active"])
 
-# 3. 데이터 저장하기
+# 3. 데이터 저장하기 (GPT 조언 반영: clear() 제거 및 안전 덮어쓰기)
 def update_gsheet(df):
     try:
         gc = get_gspread_client()
         doc = gc.open_by_key(st.secrets["connections"]["gsheets"]["spreadsheet"])
         worksheet = doc.worksheet("room_users")
-        worksheet.clear()
-        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        
+        # [변경점] 전체 삭제(clear) 대신 데이터가 있는 만큼만 정확히 덮어씁니다.
+        # 데이터프레임을 리스트 형식으로 변환 (헤더 포함)
+        data_to_write = [df.columns.values.tolist()] + df.values.tolist()
+        
+        # 1. 일단 첫 번째 셀(A1)부터 데이터를 덮어씁니다.
+        worksheet.update(values=data_to_write, range_name='A1')
+        
+        # 2. 만약 기존보다 데이터가 줄어들었을 경우, 남은 찌꺼기 행들을 지워줍니다.
+        # (이 방식이 clear 후 쓰는 것보다 네트워크 오류 시 훨씬 안전합니다)
+        current_rows = len(worksheet.get_all_values())
+        new_rows = len(data_to_write)
+        if current_rows > new_rows:
+            worksheet.delete_rows(new_rows + 1, current_rows)
+            
         st.cache_data.clear()
         return True
     except Exception as e:
-        st.error(f"⚠️ 저장 실패 상세 원인: {e}")
+        st.error(f"⚠️ 저장 중 오류 발생: {e}. 데이터 확인이 필요합니다.")
         return False
 
 # 데이터 로드 및 전처리
@@ -142,15 +155,8 @@ if selected == "실시간 도면":
                 st.write("현재 빈 방입니다.")
             
             for u in users:
-                # [수정] 우측 상세 정보창 전화번호 마스킹 적용
                 phone_raw = str(u['phone'])
-                if is_admin:
-                    phone_display = phone_raw
-                else:
-                    if len(phone_raw) >= 10:
-                        phone_display = f"{phone_raw[:3]}-****-{phone_raw[-4:]}"
-                    else:
-                        phone_display = "****"
+                phone_display = phone_raw if is_admin else (f"{phone_raw[:3]}-****-{phone_raw[-4:]}" if len(phone_raw) >= 10 else "****")
                 
                 st.markdown(f"""
                 <div style="border:1px solid #ddd; padding:10px; border-radius:10px; margin-bottom:10px; background-color:#f9f9f9;">
@@ -189,8 +195,13 @@ if selected == "실시간 도면":
                         ni = st.date_input("입실일", value=date.today())
                         if st.form_submit_button("입실 저장"):
                             if nn and np:
-                                last_id = pd.to_numeric(df_all["user_id"], errors='coerce').max()
-                                new_id = int(last_id + 1) if not pd.isna(last_id) else 1
+                                # ID 생성 안전 로직: 현재 있는 모든 ID 중 최대값을 정확히 찾음
+                                try:
+                                    last_id = pd.to_numeric(df_all["user_id"], errors='coerce').max()
+                                    new_id = int(last_id + 1) if not pd.isna(last_id) else 1
+                                except:
+                                    new_id = 1000 # 오류 시 안전값
+
                                 new_row = {
                                     "user_id": new_id, "room_number": str(sel_room), "name": nn,
                                     "gender": ng, "phone": np, "car_number": nc, "check_in": ni.strftime('%Y-%m-%d'),
@@ -203,7 +214,6 @@ if selected == "실시간 도면":
         else:
             st.info("👈 왼쪽 도면에서 방 번호를 클릭하세요.")
 
-# --- [메뉴 2 & 3: 명단 조회 보안 적용] ---
 elif selected == "전체 명단":
     st.subheader("📋 현재 거주자 명단")
     display_df = df_active.copy()
