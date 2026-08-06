@@ -1,7 +1,7 @@
-streamlit==1.32.0
+streamlit
 pandas
 Pillow
 streamlit-option-menu
-streamlit-image-coordinates
+streamlit-image-coordinates>=0.1.7
 openpyxl
 gspread
