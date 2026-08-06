@@ -1,3 +1,7 @@
+import streamlit.elements.image as st_image
+if not hasattr(st_image, "UseColumnWith"):
+    st_image.UseColumnWith = bool
+
 import os
 import json
 import uuid
